@@ -554,7 +554,7 @@ begin
   Form1.Visible := True;  // Hiển thị lại form
   Form1.WindowState := wsNormal;  // Khôi phục trạng thái bình thường
   Form1.ShowInTaskbar := True;  // Hiển thị lại form trong Taskbar
-  TrayIcon1.Visible := False;
+  // TrayIcon1.Visible := False;
 end;
 
 procedure TForm1.TrayIcon1MouseDown(Sender: TObject; Button: TMouseButton;
