@@ -17,7 +17,7 @@ object Form1: TForm1
   OnCreate = FormCreate
   TextHeight = 15
   object btWeb: TButton
-    Left = 3
+    Left = 8
     Top = 377
     Width = 130
     Height = 30
@@ -46,7 +46,7 @@ object Form1: TForm1
     TabOrder = 1
   end
   object btTerminal: TButton
-    Left = 297
+    Left = 292
     Top = 377
     Width = 130
     Height = 30
@@ -60,9 +60,9 @@ object Form1: TForm1
     TabOrder = 2
   end
   object btRoot: TButton
-    Left = 444
+    Left = 434
     Top = 377
-    Width = 130
+    Width = 135
     Height = 30
     Caption = 'Root'
     Font.Charset = DEFAULT_CHARSET
