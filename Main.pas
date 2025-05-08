@@ -345,7 +345,10 @@ begin
   if SelectedVersion <> '' then
   begin
     lbApacheVer.Caption := 'Apache: ' + SelectedVersion;
-    Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion;
+    if Pos('NTS', UpperCase(SelectedPhpVersion)) > 0 then
+      Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (NTS)'
+    else
+      Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (TS)';
   end
   else
   begin
@@ -484,7 +487,10 @@ begin
 
   (Sender as TMenuItem).Checked := True;
   SelectedPhpVersion := (Sender as TMenuItem).Hint;
-  Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion;
+  if Pos('NTS', UpperCase(SelectedPhpVersion)) > 0 then
+    Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (NTS)'
+  else
+    Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (TS)';
 
   //lbApacheVer.Caption := 'PHP: ' + SelectedPhpVersion;
   WriteToLogMessage('Selected PHP version: ' + SelectedPhpVersion);
