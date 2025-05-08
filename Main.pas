@@ -423,7 +423,7 @@ begin
       if not IsApacheRunning then
       begin
         WriteToLogMessage('Apache stopped due to version change.');
-        ShowMessage('Apache đã dừng!');
+        //ShowMessage('Apache đã dừng!');
       end
       else
       begin
@@ -482,18 +482,72 @@ begin
 end;
 
 procedure TForm1.PhpVersionMenuClick(Sender: TObject);
+var
+  WasRunning: Boolean;
+  ApachePath, Params: string;
+  RetryCount: Integer;
 begin
   UncheckAllPhpVersionMenu;
 
   (Sender as TMenuItem).Checked := True;
   SelectedPhpVersion := (Sender as TMenuItem).Hint;
+
   if Pos('NTS', UpperCase(SelectedPhpVersion)) > 0 then
     Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (NTS)'
   else
     Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (TS)';
 
-  //lbApacheVer.Caption := 'PHP: ' + SelectedPhpVersion;
   WriteToLogMessage('Selected PHP version: ' + SelectedPhpVersion);
+
+  WasRunning := IsApacheRunning;
+
+  if WasRunning then
+    KillApache;
+
+  if not DirectoryExists('bin\apache\' + SelectedVersion) then
+  begin
+    ShowMessage('Không tìm thấy Apache để cập nhật cấu hình.');
+    Exit;
+  end;
+
+  // Cập nhật lại cấu hình Apache với phiên bản PHP mới
+  ApacheConfigUtils.UpdateApacheConfigs(
+    IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\apache\' + SelectedVersion,
+    SelectedVersion,
+    SelectedPhpVersion
+  );
+
+  if WasRunning then
+  begin
+    ApachePath := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) +
+                  'bin\apache\' + SelectedVersion + '\bin\httpd.exe';
+    Params := '-d "' + IncludeTrailingPathDelimiter(ExtractFilePath(ApachePath)) + '.."';
+
+    if ShellExecute(0, 'open', PChar(ApachePath), PChar(Params), nil, SW_HIDE) <= 32 then
+    begin
+      ShowMessage('Không thể khởi động Apache!');
+      WriteToLogMessage('Apache failed to start after PHP change: ' + ApachePath);
+      Exit;
+    end;
+
+    RetryCount := 0;
+    while (not IsApacheRunning) and (RetryCount < 10) do
+    begin
+      Sleep(200);
+      Inc(RetryCount);
+    end;
+
+    if IsApacheRunning then
+    begin
+      ShowMessage('Apache đã được khởi động lại với PHP mới!');
+      WriteToLogMessage('Apache restarted with PHP version: ' + SelectedPhpVersion);
+    end
+    else
+    begin
+      ShowMessage('Không thể khởi động lại Apache!');
+      WriteToLogMessage('Apache failed to restart with PHP version: ' + SelectedPhpVersion);
+    end;
+  end;
 end;
 
 function TForm1.IsApacheRunning: Boolean;

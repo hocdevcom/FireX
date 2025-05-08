@@ -61,7 +61,7 @@
     <body>
         <div class="container">
             <div class="content">
-                <div class="title" title="Laragon">lara1111</div>
+                <div class="title" title="Laragon">LaraX</div>
      
                 <div class="info"><br />
                       <?php print($_SERVER['SERVER_SOFTWARE']); ?><br />
@@ -70,7 +70,7 @@
 
                 </div>
                 <div class="opt">
-                  <div><a title="Getting Started" href="https://lara.org/docs">Getting Started</a></div>
+                  <div><a title="Getting Started" href="https://hocdev.com/docs">Getting Started</a></div>
                 </div>
             </div>
 
