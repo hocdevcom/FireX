@@ -45,8 +45,8 @@ object Form1: TForm1
     ParentFont = False
   end
   object LbStatus: TLabel
-    Left = 302
-    Top = 26
+    Left = 350
+    Top = 30
     Width = 9
     Height = 15
     Alignment = taRightJustify
@@ -127,8 +127,8 @@ object Form1: TForm1
     OnClick = BitBtn1Click
   end
   object PopupMenu1: TPopupMenu
-    Left = 492
-    Top = 320
+    Left = 580
+    Top = 328
     object N11: TMenuItem
       Caption = 'Lara'
       object N111: TMenuItem
@@ -180,8 +180,8 @@ object Form1: TForm1
     end
   end
   object ImageList1: TImageList
-    Left = 456
-    Top = 320
+    Left = 528
+    Top = 328
     Bitmap = {
       494C010102000800040010001000FFFFFFFFFF10FFFFFFFFFFFFFFFF424D3600
       0000000000003600000028000000400000001000000001002000000000000010
@@ -323,7 +323,7 @@ object Form1: TForm1
       000000000000}
   end
   object TrayIcon1: TTrayIcon
-    Left = 528
-    Top = 320
+    Left = 632
+    Top = 328
   end
 end
