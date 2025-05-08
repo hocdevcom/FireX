@@ -133,6 +133,8 @@
         </DCCReference>
         <DCCReference Include="ApacheConfigUtils.pas"/>
         <DCCReference Include="WriteToLog.pas"/>
+        <DCCReference Include="TrayIconHandler.pas"/>
+        <DCCReference Include="ApacheVersionUtils.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

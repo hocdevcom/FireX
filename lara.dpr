@@ -4,7 +4,9 @@ uses
   Vcl.Forms,
   Main in 'Main.pas' {Form1},
   ApacheConfigUtils in 'ApacheConfigUtils.pas',
-  WriteToLog in 'WriteToLog.pas';
+  WriteToLog in 'WriteToLog.pas',
+  TrayIconHandler in 'TrayIconHandler.pas',
+  ApacheVersionUtils in 'ApacheVersionUtils.pas';
 
 {$R *.res}
 

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Export Play and Stop Icons to PNG</title>
+</head>
+<body>
+  <canvas id="playIcon" width="16" height="16"></canvas>
+  <canvas id="stopIcon" width="16" height="16"></canvas>
+
+  <br>
+  <button onclick="downloadIcon('playIcon', 'play.png')">Tải biểu tượng Play</button>
+  <button onclick="downloadIcon('stopIcon', 'stop.png')">Tải biểu tượng Stop</button>
+
+  <script>
+    // Hàm vẽ hình tam giác cho Play và hình vuông cho Stop
+    function drawPlayIcon(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+
+      // Xóa canvas trước khi vẽ mới
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Vẽ hình tam giác (biểu tượng Play)
+      ctx.beginPath();
+      ctx.moveTo(4, 2);   // Điểm đầu
+      ctx.lineTo(12, 8);  // Đoạn thẳng thứ hai
+      ctx.lineTo(4, 14);  // Đoạn thẳng thứ ba
+      ctx.closePath();
+      ctx.fillStyle = 'green';
+      ctx.fill();
+    }
+
+    function drawStopIcon(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+
+      // Xóa canvas trước khi vẽ mới
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Vẽ hình vuông (biểu tượng Stop)
+      ctx.fillStyle = 'red';
+      ctx.fillRect(4, 4, 8, 8);  // Tạo hình vuông 8x8 tại vị trí (4,4)
+    }
+
+    // Hàm tải ảnh từ canvas dưới dạng PNG
+    function downloadIcon(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Vẽ các biểu tượng Play và Stop
+    drawPlayIcon('playIcon');
+    drawStopIcon('stopIcon');
+  </script>
+</body>
+</html>

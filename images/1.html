@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Export Circles to PNG</title>
+</head>
+<body>
+  <canvas id="circleOn" width="16" height="16"></canvas>
+  <canvas id="circleOff" width="16" height="16"></canvas>
+
+  <br>
+  <button onclick="downloadCircle('circleOn', 'on.png')">Tải chấm xanh (bật)</button>
+  <button onclick="downloadCircle('circleOff', 'off.png')">Tải chấm đỏ (tắt)</button>
+
+  <script>
+    function drawCircle(canvasId, color) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+
+      // Nền trong suốt mặc định
+      ctx.beginPath();
+      ctx.arc(8, 8, 8, 0, 2 * Math.PI);  // Thay đổi vị trí vẽ để căn giữa trong canvas 16x16
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    function downloadCircle(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Vẽ chấm xanh và đỏ
+    drawCircle('circleOn', 'green');
+    drawCircle('circleOff', 'red');
+  </script>
+</body>
+</html>

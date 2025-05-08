@@ -6,7 +6,7 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus,
   TlHelp32, ShellAPI, System.IOUtils, Vcl.ExtCtrls, Vcl.Imaging.pngimage, WriteToLog, ApacheConfigUtils,
-  Vcl.ButtonGroup, System.ImageList, Vcl.ImgList, Vcl.Buttons;
+  Vcl.ButtonGroup, System.ImageList, Vcl.ImgList, System.UITypes, Vcl.Buttons, TrayIconHandler, ApacheVersionUtils;
 
 type
   TForm1 = class(TForm)
@@ -28,43 +28,39 @@ type
     N2: TMenuItem;
     Apache1: TMenuItem;
     Version1: TMenuItem;
-    GroupBox1: TGroupBox;
-    lbApacheVer: TLabel;
-    imgApacheStatus: TImage;
-    Label1: TLabel;
-    GroupBox2: TGroupBox;
-    Image1: TImage;
-    BitBtn1: TBitBtn;
-    btStarAll: TBitBtn;
-    BitBtn2: TBitBtn;
     ImageList1: TImageList;
     TrayIcon1: TTrayIcon;
     ut1: TMenuItem;
+    btStarAll: TBitBtn;
+    lbApacheVer: TLabel;
+    Label1: TLabel;
+    LbStatus: TLabel;
+    PHP1: TMenuItem;
+    Version2: TMenuItem;
     procedure btRootClick(Sender: TObject);
     procedure btWebClick(Sender: TObject);
     procedure btStarAllClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure VersionMenuClick(Sender: TObject);
+    procedure PhpVersionMenuClick(Sender: TObject);
     procedure BitBtn1Click(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-    procedure TrayIcon1Click(Sender: TObject);
     procedure ut1Click(Sender: TObject);
-    procedure TrayIcon1MouseDown(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
   private
     { Private declarations }
-    SelectedVersion: string;
-    FChangeHandle: THandle;
-    procedure UpdateVersionMenu;
-    procedure WatchApacheDir;
+    FChangeHandleApache: THandle;
+    FChangeHandlePhp: THandle;
+    procedure WatchVersionDirs;
     procedure ProcessDirectoryChange;
     function IsApacheRunning: Boolean;
     procedure KillApache;
     procedure UncheckAllVersionMenu;
-    function ExtractApacheVersion(const FullName: string): string;
+    procedure UncheckAllPhpVersionMenu;
   public
     { Public declarations }
+    SelectedVersion: string;
+    SelectedPhpVersion: string;
   end;
 
 var
@@ -72,6 +68,7 @@ var
   Mutex: THandle;
 const
   MutexName = '{7E215C93-8F62-442F-89F2-BC1E9ECA6297}';
+  AppBaseTitle = 'Lara BETA 1.0.0';
 
 implementation
 
@@ -80,7 +77,30 @@ implementation
 procedure TForm1.BitBtn1Click(Sender: TObject);
 var
   ApachePath, Params: string;
+  SysDir: array[0..MAX_PATH] of Char;
+  UserResponse: Integer;
 begin
+  // Kiểm tra sự tồn tại của file vcruntime140.dll
+  GetSystemDirectory(SysDir, MAX_PATH);
+  if not FileExists(IncludeTrailingPathDelimiter(SysDir) + 'vcruntime140.dll') then
+  begin
+    // Hiển thị hộp thoại với 2 nút: Truy cập hoặc Không
+    UserResponse := MessageDlg('Thiếu file vcruntime140.dll!' + sLineBreak + 'Hãy cài đặt Visual C++ Redistributable.' + sLineBreak +
+                               'Bạn muốn truy cập trang cài đặt?', mtWarning, [mbYes, mbNo], 0);
+
+    // Kiểm tra nút người dùng chọn
+    if UserResponse = mrYes then
+    begin
+      ShellExecute(0, 'open', 'https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist', nil, nil, SW_SHOWNORMAL);
+      Exit;
+    end
+    else
+    begin
+      // Nếu người dùng chọn "Không", không tiếp tục với quá trình khởi động Apache
+      Exit;
+    end;
+  end;
+
   if IsApacheRunning then
   begin
     KillApache;
@@ -88,8 +108,8 @@ begin
     if not IsApacheRunning then
     begin
       btStarAll.Caption := 'Start';
-      imgApacheStatus.Picture.LoadFromFile('red.png');
-      imgApacheStatus.Visible := True;
+      LbStatus.Caption := 'Fail';
+      LbStatus.Font.Color := clRed;
       btStarAll.Images := ImageList1;
       btStarAll.ImageIndex := 1;
       WriteToLogMessage('Apache stopped.');
@@ -119,7 +139,7 @@ begin
     end;
 
     ApacheConfigUtils.UpdateApacheConfigs(IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) +
-                    'bin\apache\' + SelectedVersion, SelectedVersion);
+                    'bin\apache\' + SelectedVersion, SelectedVersion, SelectedPhpVersion);
 
     Params := '-d "' + IncludeTrailingPathDelimiter(ExtractFilePath(ApachePath)) + '.."';
 
@@ -140,8 +160,8 @@ begin
     if IsApacheRunning then
     begin
       btStarAll.Caption := 'Stop';
-      imgApacheStatus.Picture.LoadFromFile('green.png');
-      imgApacheStatus.Visible := True;
+      LbStatus.Caption := 'Success';
+      LbStatus.Font.Color := clBlue;
       btStarAll.Images := ImageList1;
       btStarAll.ImageIndex := 0;
       WriteToLogMessage('Apache started: ' + ApachePath);
@@ -193,8 +213,8 @@ begin
     if not IsApacheRunning then
     begin
       btStarAll.Caption := 'Start';
-      imgApacheStatus.Picture.LoadFromFile('red.png');
-      imgApacheStatus.Visible := True;
+      LbStatus.Caption := 'Fail';
+      LbStatus.Font.Color := clRed;
       WriteToLogMessage('Apache stopped.');
     end
     else
@@ -222,7 +242,7 @@ begin
     end;
 
     ApacheConfigUtils.UpdateApacheConfigs(IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) +
-                    'bin\apache\' + SelectedVersion, SelectedVersion);
+                    'bin\apache\' + SelectedVersion, SelectedVersion, SelectedPhpVersion);
 
     Params := '-d "' + IncludeTrailingPathDelimiter(ExtractFilePath(ApachePath)) + '.."';
 
@@ -243,8 +263,8 @@ begin
     if IsApacheRunning then
     begin
       btStarAll.Caption := 'Stop';
-      imgApacheStatus.Picture.LoadFromFile('green.png');
-      imgApacheStatus.Visible := True;
+      LbStatus.Caption := 'Success';
+      LbStatus.Font.Color := clBlue;
       WriteToLogMessage('Apache started: ' + ApachePath);
     end
     else
@@ -263,6 +283,7 @@ end;
 procedure TForm1.FormCreate(Sender: TObject);
 var
   ApacheBinDir: string;
+  PHPBinDir: string;
 begin
   Mutex := CreateMutex(nil, True, PChar(MutexName));
   if (Mutex = 0) then
@@ -273,6 +294,8 @@ begin
 
   begin
     Form1.PopupMenu := PopupMenu1;
+    TrayIcon1.OnClick := TTrayIconHandler.TrayIconClick;
+    TrayIcon1.OnMouseDown := TTrayIconHandler.TrayIconMouseDown;
   end;
 
   if (GetLastError = ERROR_ALREADY_EXISTS) then
@@ -283,16 +306,18 @@ begin
   end;
 
   ApacheBinDir := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\apache';
+  PHPBinDir := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\php';
 
   if DirectoryExists(ApacheBinDir) then
   begin
-    UpdateVersionMenu; // { thêm mới }: cập nhật menu khi khởi động
+    UpdateVersionMenu(ApacheBinDir);
+    UpdatePhpVersionMenu(PHPBinDir);
 
     // { thêm mới }: theo dõi thư mục thay đổi trong thread riêng
     TThread.CreateAnonymousThread(
       procedure
       begin
-        WatchApacheDir;
+        WatchVersionDirs;
       end).Start;
   end
   else
@@ -304,23 +329,29 @@ begin
     btStarAll.Caption := 'Stop'; // Nếu Apache đang chạy, đổi nút thành Stop
     btStarAll.Images := ImageList1;
     btStarAll.ImageIndex := 0;
-    imgApacheStatus.Picture.LoadFromFile('green.png');
-    imgApacheStatus.Visible := True;
+    LbStatus.Caption := 'Success';
+    LbStatus.Font.Color := clBlue;
   end
   else
   begin
     btStarAll.Caption := 'Start'; // Nếu Apache không chạy, giữ nút là Start
     btStarAll.Images := ImageList1;
     btStarAll.ImageIndex := 1;
-    imgApacheStatus.Picture.LoadFromFile('red.png');
-    imgApacheStatus.Visible := True;
+    LbStatus.Caption := 'Fail';
+    LbStatus.Font.Color := clRed;
   end;
 
   // Đặt giá trị mặc định cho lbApacheVer dựa trên SelectedVersion
   if SelectedVersion <> '' then
-    lbApacheVer.Caption := 'Apache: ' + ExtractApacheVersion(SelectedVersion)
+  begin
+    lbApacheVer.Caption := 'Apache: ' + SelectedVersion;
+    Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion;
+  end
   else
+  begin
     lbApacheVer.Caption := 'Chưa chọn phiên bản PHP';
+    Form1.Caption := AppBaseTitle;
+  end;
 end;
 
 procedure TForm1.FormClose(Sender: TObject; var Action: TCloseAction);
@@ -328,9 +359,8 @@ begin
   if Mutex <> 0 then
     CloseHandle(Mutex);
 
-  // { thêm mới }: hủy theo dõi thư mục
-  if FChangeHandle <> 0 then
-    CloseHandle(FChangeHandle);
+  if FChangeHandleApache <> 0 then CloseHandle(FChangeHandleApache);
+  if FChangeHandlePhp <> 0 then CloseHandle(FChangeHandlePhp);
 end;
 
 procedure TForm1.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -351,6 +381,14 @@ begin
     (Version1.Items[I] as TMenuItem).Checked := False;
 end;
 
+procedure TForm1.UncheckAllPhpVersionMenu;
+var
+  I: Integer;
+begin
+  for I := 0 to Version2.Count - 1 do
+    (Version2.Items[I] as TMenuItem).Checked := False;
+end;
+
 procedure TForm1.VersionMenuClick(Sender: TObject);
 var
   VersionMenuItem: TMenuItem;
@@ -364,7 +402,7 @@ begin
   if VersionMenuItem.Hint <> '' then
   begin
     // Cập nhật lbPhpVer thành tên phiên bản PHP
-    lbApacheVer.Caption := 'Apache: ' + ExtractApacheVersion(VersionMenuItem.Hint);
+    lbApacheVer.Caption := 'Apache: ' + VersionMenuItem.Hint;
 
     // Kiểm tra nếu người dùng đã chọn lại phiên bản đang sử dụng
     if VersionMenuItem.Hint = SelectedVersion then
@@ -392,7 +430,7 @@ begin
       end;
 
       UpdateApacheConfigs(IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) +
-					'bin\apache\' + SelectedVersion, SelectedVersion);
+					'bin\apache\' + SelectedVersion, SelectedVersion, SelectedPhpVersion);
 
       ApachePath := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) +
                     'bin\apache\' + SelectedVersion + '\bin\httpd.exe';
@@ -440,6 +478,18 @@ begin
     ShowMessage('Không có thông tin phiên bản!');
 end;
 
+procedure TForm1.PhpVersionMenuClick(Sender: TObject);
+begin
+  UncheckAllPhpVersionMenu;
+
+  (Sender as TMenuItem).Checked := True;
+  SelectedPhpVersion := (Sender as TMenuItem).Hint;
+  Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion;
+
+  //lbApacheVer.Caption := 'PHP: ' + SelectedPhpVersion;
+  WriteToLogMessage('Selected PHP version: ' + SelectedPhpVersion);
+end;
+
 function TForm1.IsApacheRunning: Boolean;
 var
   Snapshot: THandle;
@@ -463,125 +513,102 @@ begin
   CloseHandle(Snapshot);
 end;
 
-// { thêm mới }: cập nhật lại menu phiên bản từ thư mục bin\apache
-procedure TForm1.UpdateVersionMenu;
-var
-  ApacheBinDir: string;
-  SearchRec: TSearchRec;
-  Versions: TStringList;
-  VersionMenuItem: TMenuItem;
-begin
-  ApacheBinDir := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\apache';
-  Versions := TStringList.Create;
-  try
-    if FindFirst(ApacheBinDir + '\*', faDirectory, SearchRec) = 0 then
-    begin
-      repeat
-        if (SearchRec.Attr and faDirectory = faDirectory) and
-           (SearchRec.Name <> '.') and (SearchRec.Name <> '..') then
-          Versions.Add(SearchRec.Name);
-      until FindNext(SearchRec) <> 0;
-      FindClose(SearchRec);
-    end;
-
-    Versions.Sort;
-    Version1.Clear;
-
-    for var S in Versions do
-    begin
-      VersionMenuItem := TMenuItem.Create(Version1);
-      VersionMenuItem.Caption := S;
-      VersionMenuItem.Hint := S;
-      VersionMenuItem.OnClick := VersionMenuClick;
-      Version1.Add(VersionMenuItem);
-    end;
-
-    if Version1.Count > 0 then
-    begin
-      (Version1.Items[0] as TMenuItem).Checked := True;
-      SelectedVersion := (Version1.Items[0] as TMenuItem).Hint;
-    end;
-  finally
-    Versions.Free;
-  end;
-end;
-
 procedure TForm1.ut1Click(Sender: TObject);
 begin
   Application.Terminate;
 end;
 
 // { thêm mới }: theo dõi thư mục bin\apache
-procedure TForm1.WatchApacheDir;
+procedure TForm1.WatchVersionDirs;
 var
-  ApacheBinDir: string;
+  ApacheBinDir, PhpBinDir: string;
+  ApacheChangeHandle, PhpChangeHandle: THandle;
 begin
+  // Đường dẫn thư mục Apache và PHP
   ApacheBinDir := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\apache';
+  PhpBinDir := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\php';
 
-  FChangeHandle := FindFirstChangeNotification(
+  // Theo dõi thư mục Apache
+  ApacheChangeHandle := FindFirstChangeNotification(
     PChar(ApacheBinDir),
     False,
     FILE_NOTIFY_CHANGE_DIR_NAME or FILE_NOTIFY_CHANGE_FILE_NAME
   );
 
-  if FChangeHandle = INVALID_HANDLE_VALUE then
+  if ApacheChangeHandle = INVALID_HANDLE_VALUE then
   begin
     WriteToLogMessage('Không thể theo dõi thư mục bin\apache.');
-    Exit;
+  end
+  else
+  begin
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          while WaitForSingleObject(ApacheChangeHandle, INFINITE) = WAIT_OBJECT_0 do
+          begin
+            TThread.Synchronize(nil,
+              procedure
+              begin
+                ProcessDirectoryChange;  // Gọi lại hàm xử lý thay đổi thư mục Apache
+                UpdateVersionMenu(ApacheBinDir);  // Cập nhật menu Apache khi có thay đổi
+              end
+            );
+            if not FindNextChangeNotification(ApacheChangeHandle) then Break;
+          end;
+        finally
+          if ApacheChangeHandle <> INVALID_HANDLE_VALUE then
+            CloseHandle(ApacheChangeHandle);
+        end;
+      end
+    ).Start;
   end;
 
-  try
-    while WaitForSingleObject(FChangeHandle, INFINITE) = WAIT_OBJECT_0 do
-    begin
-      TThread.Synchronize(nil, ProcessDirectoryChange);
-      if not FindNextChangeNotification(FChangeHandle) then Break;
-    end;
-  finally
-    if FChangeHandle <> INVALID_HANDLE_VALUE then
-      CloseHandle(FChangeHandle);
+  // Theo dõi thư mục PHP
+  PhpChangeHandle := FindFirstChangeNotification(
+    PChar(PhpBinDir),
+    False,
+    FILE_NOTIFY_CHANGE_DIR_NAME or FILE_NOTIFY_CHANGE_FILE_NAME
+  );
+
+  if PhpChangeHandle = INVALID_HANDLE_VALUE then
+  begin
+    WriteToLogMessage('Không thể theo dõi thư mục bin\php.');
+  end
+  else
+  begin
+    TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          while WaitForSingleObject(PhpChangeHandle, INFINITE) = WAIT_OBJECT_0 do
+          begin
+            TThread.Synchronize(nil,
+              procedure
+              begin
+                ProcessDirectoryChange;  // Gọi lại hàm xử lý thay đổi thư mục PHP
+                UpdatePhpVersionMenu(PhpBinDir);  // Cập nhật menu PHP khi có thay đổi
+              end
+            );
+            if not FindNextChangeNotification(PhpChangeHandle) then Break;
+          end;
+        finally
+          if PhpChangeHandle <> INVALID_HANDLE_VALUE then
+            CloseHandle(PhpChangeHandle);
+        end;
+      end
+    ).Start;
   end;
 end;
 
 // { thêm mới }: xử lý khi thư mục thay đổi
 procedure TForm1.ProcessDirectoryChange;
-begin
-  UpdateVersionMenu;
-end;
-
-procedure TForm1.TrayIcon1Click(Sender: TObject);
-begin
-  // Hiển thị form từ tray
-  Form1.Visible := True;  // Hiển thị lại form
-  Form1.WindowState := wsNormal;  // Khôi phục trạng thái bình thường
-  Form1.ShowInTaskbar := True;  // Hiển thị lại form trong Taskbar
-  // TrayIcon1.Visible := False;
-end;
-
-procedure TForm1.TrayIcon1MouseDown(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
-begin
-  if Button = mbRight then
-    PopupMenu1.Popup(Mouse.CursorPos.X, Mouse.CursorPos.Y);
-end;
-
-function TForm1.ExtractApacheVersion(const FullName: string): string;
 var
-  StartPos, EndPos: Integer;
-  VersionStr: string;
+  ApacheBinDir: string;
 begin
-  // Tìm vị trí bắt đầu của số phiên bản
-  StartPos := Pos('httpd-', FullName);
-  if StartPos > 0 then
-  begin
-    VersionStr := Copy(FullName, StartPos + 6, Length(FullName)); // Bỏ 'httpd-'
-    EndPos := Pos('-', VersionStr); // Tìm dấu '-' tiếp theo
-    if EndPos > 0 then
-      Result := Copy(VersionStr, 1, EndPos - 1)
-    else
-      Result := VersionStr;
-  end
-  else
-    Result := ''; // Trả về chuỗi rỗng nếu không tìm thấy
+  ApacheBinDir := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\apache';
+  UpdateVersionMenu(ApacheBinDir);
 end;
 
 end.
+

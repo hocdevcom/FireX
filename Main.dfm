@@ -3,9 +3,8 @@ object Form1: TForm1
   Top = 0
   BorderIcons = [biSystemMenu]
   BorderStyle = bsSingle
-  Caption = 'Lara'
   ClientHeight = 415
-  ClientWidth = 577
+  ClientWidth = 664
   Color = clBtnHighlight
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -15,11 +14,48 @@ object Form1: TForm1
   Position = poScreenCenter
   OnCloseQuery = FormCloseQuery
   OnCreate = FormCreate
+  DesignSize = (
+    664
+    415)
   TextHeight = 15
+  object lbApacheVer: TLabel
+    Left = 14
+    Top = 26
+    Width = 46
+    Height = 17
+    Caption = 'Apache:'
+    Font.Charset = ANSI_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -13
+    Font.Name = 'Segoe UI'
+    Font.Style = []
+    ParentFont = False
+  end
+  object Label1: TLabel
+    Left = 14
+    Top = 58
+    Width = 44
+    Height = 17
+    Caption = 'MySQL:'
+    Font.Charset = ANSI_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -13
+    Font.Name = 'Segoe UI'
+    Font.Style = []
+    ParentFont = False
+  end
+  object LbStatus: TLabel
+    Left = 302
+    Top = 26
+    Width = 9
+    Height = 15
+    Alignment = taRightJustify
+    Caption = '...'
+  end
   object btWeb: TButton
-    Left = 8
+    Left = 143
     Top = 377
-    Width = 130
+    Width = 120
     Height = 30
     Caption = 'Web'
     Font.Charset = DEFAULT_CHARSET
@@ -32,9 +68,9 @@ object Form1: TForm1
     OnClick = btWebClick
   end
   object btDatabase: TButton
-    Left = 150
+    Left = 272
     Top = 377
-    Width = 130
+    Width = 120
     Height = 30
     Caption = 'Database'
     Font.Charset = DEFAULT_CHARSET
@@ -46,9 +82,9 @@ object Form1: TForm1
     TabOrder = 1
   end
   object btTerminal: TButton
-    Left = 292
+    Left = 401
     Top = 377
-    Width = 130
+    Width = 120
     Height = 30
     Caption = 'Terminal'
     Font.Charset = DEFAULT_CHARSET
@@ -60,9 +96,9 @@ object Form1: TForm1
     TabOrder = 2
   end
   object btRoot: TButton
-    Left = 434
+    Left = 530
     Top = 377
-    Width = 135
+    Width = 120
     Height = 30
     Caption = 'Root'
     Font.Charset = DEFAULT_CHARSET
@@ -74,98 +110,21 @@ object Form1: TForm1
     TabOrder = 3
     OnClick = btRootClick
   end
-  object GroupBox1: TGroupBox
-    Left = 8
-    Top = 8
-    Width = 267
-    Height = 129
-    Caption = 'Apache'
+  object btStarAll: TBitBtn
+    Left = 14
+    Top = 377
+    Width = 120
+    Height = 30
+    Anchors = [akLeft, akTop, akRight, akBottom]
+    Caption = 'Start'
+    Font.Charset = ANSI_CHARSET
+    Font.Color = clBlack
+    Font.Height = -13
+    Font.Name = 'Segoe UI'
+    Font.Style = []
+    ParentFont = False
     TabOrder = 4
-    object lbApacheVer: TLabel
-      Left = 29
-      Top = 42
-      Width = 49
-      Height = 14
-      Caption = 'Apache:'
-      Font.Charset = ANSI_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -12
-      Font.Name = 'Tahoma'
-      Font.Style = [fsBold]
-      ParentFont = False
-    end
-    object imgApacheStatus: TImage
-      Left = 222
-      Top = 42
-      Width = 12
-      Height = 12
-      Visible = False
-    end
-    object Label1: TLabel
-      Left = 29
-      Top = 74
-      Width = 46
-      Height = 14
-      Caption = 'MySQL:'
-      Font.Charset = ANSI_CHARSET
-      Font.Color = clWindowText
-      Font.Height = -12
-      Font.Name = 'Tahoma'
-      Font.Style = [fsBold]
-      ParentFont = False
-    end
-    object Image1: TImage
-      Left = 222
-      Top = 74
-      Width = 12
-      Height = 12
-      Visible = False
-    end
-  end
-  object GroupBox2: TGroupBox
-    Left = 302
-    Top = 8
-    Width = 267
-    Height = 129
-    Caption = 'Startus'
-    TabOrder = 5
-    DesignSize = (
-      267
-      129)
-    object BitBtn1: TBitBtn
-      Left = 97
-      Top = 47
-      Width = 72
-      Height = 36
-      Anchors = [akLeft, akTop, akRight, akBottom]
-      Caption = 'Reload'
-      TabOrder = 0
-    end
-    object btStarAll: TBitBtn
-      Left = 17
-      Top = 47
-      Width = 72
-      Height = 36
-      Anchors = [akLeft, akTop, akRight, akBottom]
-      Caption = 'Start'
-      Font.Charset = ANSI_CHARSET
-      Font.Color = clBlack
-      Font.Height = -13
-      Font.Name = 'Segoe UI'
-      Font.Style = []
-      ParentFont = False
-      TabOrder = 1
-      OnClick = BitBtn1Click
-    end
-    object BitBtn2: TBitBtn
-      Left = 178
-      Top = 47
-      Width = 72
-      Height = 36
-      Anchors = [akLeft, akTop, akRight, akBottom]
-      Caption = 'ReStart'
-      TabOrder = 2
-    end
+    OnClick = BitBtn1Click
   end
   object PopupMenu1: TPopupMenu
     Left = 492
@@ -202,6 +161,12 @@ object Form1: TForm1
     end
     object N2: TMenuItem
       Caption = '-'
+    end
+    object PHP1: TMenuItem
+      Caption = 'PHP'
+      object Version2: TMenuItem
+        Caption = 'Version'
+      end
     end
     object Apache1: TMenuItem
       Caption = 'Apache'
@@ -358,8 +323,6 @@ object Form1: TForm1
       000000000000}
   end
   object TrayIcon1: TTrayIcon
-    OnClick = TrayIcon1Click
-    OnMouseDown = TrayIcon1MouseDown
     Left = 528
     Top = 320
   end

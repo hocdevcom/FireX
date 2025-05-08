@@ -5,11 +5,11 @@ interface
 uses
   Vcl.Forms, System.SysUtils, System.Classes, Vcl.Dialogs, WriteToLog;
 
-procedure UpdateApacheConfigs(const ApacheBinDir: string; const SelectedVersion: string);
+procedure UpdateApacheConfigs(const ApacheBinDir: string; const SelectedVersion: string; const SelectedPhpVersion: string);
 
 implementation
 
-procedure UpdateApacheConfigs(const ApacheBinDir: string; const SelectedVersion: string);
+procedure UpdateApacheConfigs(const ApacheBinDir: string; const SelectedVersion: string; const SelectedPhpVersion: string);
 var
   HttpdConfPath, ModPhpConfPath, LaragonDir, ApacheFullPath: string;
   HttpdConfFile, ModPhpConfFile: TStringList;
@@ -25,6 +25,13 @@ begin
     if Trim(SelectedVersion) = '' then
     begin
       ShowMessage('Chưa chọn phiên bản Apache!');
+      Exit;
+    end;
+
+    // Kiểm tra nếu SelectedPhpVersion không rỗng
+    if Trim(SelectedPhpVersion) = '' then
+    begin
+      ShowMessage('Chưa chọn phiên bản PHP!');
       Exit;
     end;
 
@@ -142,13 +149,13 @@ begin
         // Thay thế đường dẫn LoadModule php_module
         if Pos('LoadModule php_module', Line) > 0 then
         begin
-          NewLine := 'LoadModule php_module "' + StringReplace(LaragonDir + 'bin/php/php-8.3.14-Win32-vs16-x64/php8apache2_4.dll', '\', '/', [rfReplaceAll]) + '"';
+          NewLine := 'LoadModule php_module "' + StringReplace(LaragonDir + 'bin/php/' + SelectedPhpVersion + '/php8apache2_4.dll', '\', '/', [rfReplaceAll]) + '"';
           ModPhpConfFile[i] := NewLine;
         end
         // Thay thế đường dẫn PHPIniDir
         else if Pos('PHPIniDir', Line) > 0 then
         begin
-          NewLine := 'PHPIniDir "' + StringReplace(LaragonDir + 'bin/php/php-8.3.14-Win32-vs16-x64', '\', '/', [rfReplaceAll]) + '"';
+          NewLine := 'PHPIniDir "' + StringReplace(LaragonDir + 'bin/php/' + SelectedPhpVersion, '\', '/', [rfReplaceAll]) + '"';
           ModPhpConfFile[i] := NewLine;
         end;
       end;
