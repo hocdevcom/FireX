@@ -68,7 +68,7 @@ var
   Mutex: THandle;
 const
   MutexName = '{7E215C93-8F62-442F-89F2-BC1E9ECA6297}';
-  AppBaseTitle = 'Lara BETA 1.0.0';
+  AppBaseTitle = 'LaraX 1.0.0';
 
 implementation
 
