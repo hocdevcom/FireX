@@ -14,12 +14,11 @@ uses
 type
   TForm1 = class(TForm)
     PopupMenu1: TPopupMenu;
-    N11, bb1, cc1, N111, N211, N221, Root1, N1, Laragonini1, ools1, N2: TMenuItem;
-    Apache1: TMenuItem;
+    PopApache: TMenuItem;
     Version1: TMenuItem;
     TrayIcon1: TTrayIcon;
-    ut1: TMenuItem;
-    PHP1: TMenuItem;
+    PopQuit: TMenuItem;
+    PopPHP: TMenuItem;
     Version2: TMenuItem;
     BtnStart: TBitBtn;
     ImageCollection1: TImageCollection;
@@ -28,7 +27,6 @@ type
     BtnDB: TBitBtn;
     BtnTer: TBitBtn;
     BtnRoot: TBitBtn;
-    MySQL1: TMenuItem;
     Version3: TMenuItem;
     procedure btRootClick(Sender: TObject);
     procedure btWebClick(Sender: TObject);
@@ -38,7 +36,7 @@ type
     procedure ApacheVersionMenuClick(Sender: TObject);
     procedure PhpVersionMenuClick(Sender: TObject);
     procedure MySQLVersionMenuClick(Sender: TObject);
-    procedure ut1Click(Sender: TObject);
+    procedure PopQuitClick(Sender: TObject);
     procedure BtnStartClick(Sender: TObject);
   private
     { Private declarations }
@@ -72,7 +70,7 @@ var
   Mutex: THandle;
 const
   MutexName = '{7E215C93-8F62-442F-89F2-BC1E9ECA6297}';
-  AppBaseTitle = 'LaraX 1.0.0';
+  AppBaseTitle = 'LaraX beta 1.0.0';
   SYMBOL_STOP = '■';
   SYMBOL_RUN = '▶';
 
@@ -509,7 +507,7 @@ begin
 end;
 
 
-procedure TForm1.ut1Click(Sender: TObject);
+procedure TForm1.PopQuitClick(Sender: TObject);
 begin
   if IsApacheRunning then
     StopApache;

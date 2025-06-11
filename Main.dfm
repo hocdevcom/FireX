@@ -77,60 +77,60 @@ object Form1: TForm1
   object PopupMenu1: TPopupMenu
     Left = 564
     Top = 328
-    object N11: TMenuItem
+    object PopLaraX: TMenuItem
       Caption = 'LaraX'
-      object N111: TMenuItem
+      object PopWeb: TMenuItem
         Caption = 'Web'
       end
-      object N211: TMenuItem
+      object PopDB: TMenuItem
         Caption = 'Database'
       end
-      object N221: TMenuItem
+      object PopTer: TMenuItem
         Caption = 'Terminal'
       end
-      object Root1: TMenuItem
+      object PopRoot: TMenuItem
         Caption = 'Root'
       end
-      object N1: TMenuItem
+      object PopLine2: TMenuItem
         Caption = '-'
       end
-      object Laragonini1: TMenuItem
+      object PopINI: TMenuItem
         Caption = 'Lara.ini'
       end
     end
-    object bb1: TMenuItem
+    object PopWWW: TMenuItem
       Caption = 'www'
     end
-    object cc1: TMenuItem
+    object PopQuick: TMenuItem
       Caption = 'Quick app'
     end
-    object ools1: TMenuItem
+    object PopTool: TMenuItem
       Caption = 'Tools'
     end
-    object N2: TMenuItem
+    object PopLine1: TMenuItem
       Caption = '-'
     end
-    object PHP1: TMenuItem
+    object PopPHP: TMenuItem
       Caption = 'PHP'
       object Version2: TMenuItem
         Caption = 'Version'
       end
     end
-    object Apache1: TMenuItem
+    object PopApache: TMenuItem
       Caption = 'Apache'
       object Version1: TMenuItem
         Caption = 'Version'
       end
     end
-    object MySQL1: TMenuItem
+    object PopMySQL: TMenuItem
       Caption = 'MySQL'
       object Version3: TMenuItem
         Caption = 'Version'
       end
     end
-    object ut1: TMenuItem
+    object PopQuit: TMenuItem
       Caption = 'Exit'
-      OnClick = ut1Click
+      OnClick = PopQuitClick
     end
   end
   object TrayIcon1: TTrayIcon
