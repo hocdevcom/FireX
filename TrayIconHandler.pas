@@ -31,7 +31,10 @@ class procedure TTrayIconHandler.TrayIconMouseDown(Sender: TObject; Button: TMou
   Shift: TShiftState; X, Y: Integer);
 begin
   if Button = mbRight then
+  begin
+    SetForegroundWindow(Form1.Handle);
     Form1.PopupMenu1.Popup(Mouse.CursorPos.X, Mouse.CursorPos.Y);
+  end;
 end;
 
 end.

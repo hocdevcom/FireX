@@ -1,12 +1,15 @@
-program lara;
+program laraX;
 
 uses
   Vcl.Forms,
   Main in 'Main.pas' {Form1},
-  ApacheConfigUtils in 'ApacheConfigUtils.pas',
   WriteToLog in 'WriteToLog.pas',
   TrayIconHandler in 'TrayIconHandler.pas',
-  ApacheVersionUtils in 'ApacheVersionUtils.pas';
+  ApacheConfig in 'ApacheConfig.pas',
+  SelectVersion in 'SelectVersion.pas',
+  StopApache in 'StopApache.pas',
+  PhpIniUpdater in 'PhpIniUpdater.pas',
+  AppConfig in 'AppConfig.pas';
 
 {$R *.res}
 
