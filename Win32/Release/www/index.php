@@ -11,7 +11,7 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>lara</title>
+        <title>FireX</title>
 
         <link href="https://fonts.googleapis.com/css?family=Karla:400" rel="stylesheet" type="text/css">
 
@@ -61,7 +61,7 @@
     <body>
         <div class="container">
             <div class="content">
-                <div class="title" title="Laragon">LaraX</div>
+                <div class="title" title="Laragon">FireX</div>
      
                 <div class="info"><br />
                       <?php print($_SERVER['SERVER_SOFTWARE']); ?><br />

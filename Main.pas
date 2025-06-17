@@ -3,12 +3,13 @@
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.StrUtils, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus,
-  TlHelp32, ShellAPI, System.IOUtils, Vcl.ExtCtrls, Vcl.Imaging.pngimage,
-  Vcl.ButtonGroup, System.ImageList, Vcl.ImgList, System.UITypes, Vcl.Buttons,
-  WriteToLog, ApacheConfig, TrayIconHandler,
-  SelectVersion, StopApache, AppConfig, Vcl.VirtualImageList, Vcl.BaseImageCollection,
+  Winapi.Windows, Winapi.Messages, System.Math, System.RegularExpressions,
+  System.StrUtils, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus, SelectVersion,
+  ServicesStop, AppConfig, MySQLIniUtils, TlHelp32, ShellAPI, System.IOUtils,
+  Vcl.ExtCtrls, Vcl.Imaging.pngimage, Vcl.ButtonGroup, System.ImageList,
+  Vcl.ImgList, System.UITypes, Vcl.Buttons, VersionWatcher, WriteToLog,
+  ServicesConfig, TrayIconHandler, Vcl.VirtualImageList, Vcl.BaseImageCollection,
   Vcl.ImageCollection;
 
 type
@@ -38,39 +39,46 @@ type
     procedure MySQLVersionMenuClick(Sender: TObject);
     procedure PopQuitClick(Sender: TObject);
     procedure BtnStartClick(Sender: TObject);
+    procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure BtnDBClick(Sender: TObject);
   private
-    { Private declarations }
     lbApache, lbApacheStatus: TLabel;
     lbMySQL, lbMySQLStatus: TLabel;
+    lbApachePort, lbMySQLPort: TLabel;
     FApacheChangeHandle: THandle;
     FPhpChangeHandle: THandle;
-    PIDFilePath, FApacheDir, FPHPDir, FMySQLDir: string;
-    procedure WatchVersionDirs;
-    procedure ProcessDirectoryChange;
+    PIDFilePath: string;
     procedure UncheckVersionMenu(VersionMenu: TMenuItem);
     procedure SelectVersion(Menu: TMenuItem; const NewVersion: string; var SelectedVersion: string; const LabelToUpdate: TLabel = nil);
+    function IsApachePhpCompatible(const ApacheVersion, PhpVersion: string; ShowWarning: Boolean = True): Boolean;
     procedure StartApache(const ApachePath: string);
-    procedure StopApache;
-    procedure UpdateUIAfterApacheChange(IsRunning: Boolean);
-    procedure CheckVCRedist;
+    procedure StartMySQL(const MySQLExePath: string);
+    procedure StopServices;
+    procedure UpdateApacheChange(IsRunning: Boolean);
+    procedure UpdateMySQLChange(IsRunning: Boolean);
     procedure InitializeTrayIcon;
     procedure UpdateWindowTitle;
-    procedure CreateStatusLabel(const ACaption: string; ALeft, ATop: Integer; out ALabel, AStatus: TLabel);
+    procedure CreateStatusLabel(const ACaption: string; ALeft, ATop: Integer;
+  out ALabel, AStatus, APortLabel: TLabel; PortValue: string);
     procedure CheckSelectedVersionInMenu(Menu: TMenuItem; const Version: string);
-    function GetBinPath(const SubDir: string): string;
   public
-    { Public declarations }
     SelectedApacheVersion: string;
     SelectedPhpVersion: string;
     SelectedMySQLVersion: string;
+    FApacheDir, FPHPDir, FMySQLDir: string;
+    function GetApachePort(const FilePath: string): string;
+    function GetMySQLPort(const FilePath: string): string;
+    function GetBinPath(const SubDir: string): string;
   end;
 
 var
   Form1: TForm1;
   Mutex: THandle;
+
 const
   MutexName = '{7E215C93-8F62-442F-89F2-BC1E9ECA6297}';
-  AppBaseTitle = 'LaraX beta 1.0.0';
+  AppBaseTitle = 'FireX 1.0.0';
   SYMBOL_STOP = '■';
   SYMBOL_RUN = '▶';
 
@@ -79,6 +87,8 @@ implementation
 {$R *.dfm}
 
 procedure TForm1.FormCreate(Sender: TObject);
+var
+  ApachePort, MySQLPort: string;
 begin
   Mutex := CreateMutex(nil, True, PChar(MutexName));
   if (Mutex = 0) or (GetLastError = ERROR_ALREADY_EXISTS) then
@@ -88,11 +98,7 @@ begin
     Exit;
   end;
 
-  CreateStatusLabel('Apache:', 140, 57, lbApache, lbApacheStatus);
-  CreateStatusLabel('MySQL:', 140, 80, lbMySQL, lbMySQLStatus);
-
   InitializeTrayIcon;
-  CheckVCRedist;
 
   FApacheDir := GetBinPath('apache');
   FPHPDir := GetBinPath('php');
@@ -104,17 +110,14 @@ begin
     Exit;
   end;
 
-  // Cập nhật menu trước
   UpdateApacheVersionMenu(FApacheDir);
   UpdatePhpVersionMenu(FPHPDir);
   UpdateMySQLVersionMenu(FMySQLDir);
 
-  // Kiểm tra và chọn phiên bản từ config
   SelectedApacheVersion := '';
   SelectedPhpVersion := '';
   SelectedMySQLVersion := '';
 
-  // Load cấu hình từ file INI và kiểm tra tồn tại
   if Config.IsVersionValid(Config.ApacheVersion, FApacheDir) then
     SelectedApacheVersion := Config.ApacheVersion;
 
@@ -124,29 +127,60 @@ begin
   if Config.IsVersionValid(Config.MySQLVersion, FMySQLDir) then
     SelectedMySQLVersion := Config.MySQLVersion;
 
-  // Hiển thị phiên bản đã chọn (nếu có)
+  ApachePort := GetApachePort(IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\conf\httpd.conf');
+  MySQLPort := GetMySQLPort(IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion + '\my.ini');
+
+  CreateStatusLabel('Apache', 130, 50, lbApache, lbApacheStatus, lbApachePort, ApachePort);
+  CreateStatusLabel('MySQL', 130, 80, lbMySQL, lbMySQLStatus, lbMySQLPort, MySQLPort);
+
   if SelectedApacheVersion <> '' then
   begin
-    lbApache.Caption := 'Apache: ' + SelectedApacheVersion;
+    lbApache.Caption := 'Apache ' + ExtractVersionNumber(SelectedApacheVersion);
     CheckSelectedVersionInMenu(Version1, SelectedApacheVersion);
   end;
 
   if SelectedMySQLVersion <> '' then
   begin
-    lbMySQL.Caption := 'MySQL: ' + SelectedMySQLVersion;
+    lbMySQL.Caption := 'MySQL ' + ExtractVersionNumber(SelectedMySQLVersion);
     CheckSelectedVersionInMenu(Version3, SelectedMySQLVersion);
   end;
 
-  // Chỉ cập nhật title nếu có PHP version hợp lệ
   if SelectedPhpVersion <> '' then
   begin
     CheckSelectedVersionInMenu(Version2, SelectedPhpVersion);
     UpdateWindowTitle;
   end;
 
-  // Bắt đầu theo dõi thư mục
   TThread.CreateAnonymousThread(WatchVersionDirs).Start;
-  UpdateUIAfterApacheChange(IsApacheRunning);
+  UpdateApacheChange(ServicesRunning('httpd.exe'));
+  UpdateMySQLChange(ServicesRunning('mysqld.exe'));
+end;
+
+function TForm1.IsApachePhpCompatible(const ApacheVersion, PhpVersion: string; ShowWarning: Boolean = True): Boolean;
+var
+  ApacheVerNum, PhpVerNum: string;
+  ApacheIsNew, PhpIsNew: Boolean;
+begin
+  Result := True;
+  if (ApacheVersion = '') or (PhpVersion = '') then Exit;
+
+  ApacheVerNum := ExtractVersionNumber(ApacheVersion);
+  PhpVerNum := ExtractVersionNumber(PhpVersion);
+
+  ApacheIsNew := IsVersionGreaterOrEqual(ApacheVerNum, '2.4.62');
+  PhpIsNew := IsVersionGreaterOrEqual(PhpVerNum, '8.4.0');
+
+  // Nếu không cùng "loại" (mới/cũ), là không tương thích
+  if ApacheIsNew xor PhpIsNew then
+  begin
+    Result := False;
+    if ShowWarning then
+    begin
+      ShowMessage('⚠ Apache và PHP không tương thích:' + sLineBreak +
+                  '- Apache ≥ 2.4.62 yêu cầu PHP ≥ 8.4.0' + sLineBreak +
+                  '- Apache < 2.4.62 yêu cầu PHP < 8.4.0');
+    end;
+  end;
 end;
 
 procedure TForm1.CheckSelectedVersionInMenu(Menu: TMenuItem; const Version: string);
@@ -170,9 +204,25 @@ begin
   Result := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\' + SubDir;
 end;
 
+procedure TForm1.BtnDBClick(Sender: TObject);
+var
+  HeidiSQLPath: string;
+begin
+  HeidiSQLPath := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\heidisql\heidisql.exe';
+
+  if FileExists(HeidiSQLPath) then
+  begin
+    ShellExecute(0, 'open', PChar(HeidiSQLPath), nil, nil, SW_SHOWNORMAL);
+  end
+  else
+  begin
+    ShowMessage('HeidiSQL executable not found at: ' + HeidiSQLPath);
+  end;
+end;
+
 procedure TForm1.BtnStartClick(Sender: TObject);
 var
-  ApachePath: string;
+  ApachePath, MySQLPath: string;
 begin
   if SelectedApacheVersion = '' then
   begin
@@ -180,7 +230,18 @@ begin
     Exit;
   end;
 
+  if SelectedPhpVersion = '' then
+  begin
+    ShowMessage('Chưa chọn phiên bản PHP!');
+    Exit;
+  end;
+
+  // Kiểm tra tương thích 2 chiều giữa Apache và PHP (có cảnh báo nếu sai)
+  if not IsApachePhpCompatible(SelectedApacheVersion, SelectedPhpVersion, True) then
+    Exit;
+
   ApachePath := IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\bin\httpd.exe';
+  MySQLPath := IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion + '\bin\mysqld.exe';
 
   if not FileExists(ApachePath) then
   begin
@@ -189,12 +250,24 @@ begin
     Exit;
   end;
 
-  if IsApacheRunning then
-    StopApache
+  if ServicesRunning(['httpd.exe', 'mysqld.exe']) then
+  begin
+    StopServices;
+  end
   else
   begin
-    ApacheConfig.UpdateApacheConfigs(IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion, SelectedApacheVersion, SelectedPhpVersion);
+    // Cập nhật lại file cấu hình
+    ServicesConfig.UpdateApacheConfigs(
+      IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion,
+      SelectedApacheVersion,
+      SelectedPhpVersion,
+      SelectedMySQLVersion
+    );
+
     StartApache(ApachePath);
+
+    if ServicesRunning('httpd.exe') then
+      StartMySQL(MySQLPath);
   end;
 end;
 
@@ -213,47 +286,79 @@ begin
   ShellExecute(0, 'open', 'http://localhost', nil, nil, SW_SHOWNORMAL);
 end;
 
-procedure TForm1.CreateStatusLabel(const ACaption: string; ALeft, ATop: Integer; out ALabel, AStatus: TLabel);
+procedure TForm1.CreateStatusLabel(const ACaption: string; ALeft, ATop: Integer;
+  out ALabel, AStatus, APortLabel: TLabel; PortValue: string);
 begin
   ALabel := TLabel.Create(Self);
   ALabel.Parent := Self;
   ALabel.Left := ALeft;
   ALabel.Top := ATop;
+  ALabel.Enabled := False;
   ALabel.Caption := ACaption;
-  ALabel.Font.Style := [];     //[fsBold];
+  ALabel.Font.Size := 11;
   ALabel.AutoSize := True;
 
   AStatus := TLabel.Create(Self);
   AStatus.Parent := Self;
-  AStatus.Left := ALabel.Left + 250;
+  AStatus.Left := ALabel.Left + 120;
   AStatus.Top := ATop;
+  AStatus.Enabled := False;
   AStatus.Caption := SYMBOL_STOP;
-  AStatus.Font.Color := clRed;
-  AStatus.Font.Style := [];    //[fsBold];
+  AStatus.Font.Size := 11;
   AStatus.AutoSize := True;
+
+  APortLabel := TLabel.Create(Self);
+  APortLabel.Parent := Self;
+  APortLabel.Left := AStatus.Left + 100;
+  APortLabel.Top := ATop;
+  AStatus.Enabled := False;
+  APortLabel.Tag := StrToIntDef(PortValue, 0);
+  APortLabel.Caption := PortValue;
+  APortLabel.Font.Size := 11;
+  APortLabel.AutoSize := True;
 end;
 
-procedure TForm1.UpdateUIAfterApacheChange(IsRunning: Boolean);
+procedure TForm1.UpdateApacheChange(IsRunning: Boolean);
 begin
   if IsRunning then
   begin
     BtnStart.Caption := 'Stop';
     BtnStart.ImageIndex := 1;
+    lbApache.Enabled := True;
+    lbApacheStatus.Enabled := True;
+    lbApachePort.Enabled := True;
     lbApacheStatus.Caption := SYMBOL_RUN;
     lbApacheStatus.Font.Color := clGreen;
-    lbMySQLStatus.Caption := SYMBOL_RUN;  // Giả sử MySQL chạy cùng Apache
-    lbMySQLStatus.Font.Color := clGreen;
-
+    BtnDB.Enabled := True;
   end
   else
   begin
     BtnStart.Caption := 'Start';
     BtnStart.ImageIndex := 0;
+    lbApache.Enabled := False;
+    lbApachePort.Enabled := False;
+    lbApacheStatus.Enabled := False;
     lbApacheStatus.Caption := SYMBOL_STOP;
-    lbApacheStatus.Font.Color := clRed;
-    lbMySQLStatus.Caption := SYMBOL_STOP;
-    lbMySQLStatus.Font.Color := clRed;
+    BtnDB.Enabled := False;
+  end;
+end;
 
+procedure TForm1.UpdateMySQLChange(IsRunning: Boolean);
+begin
+  if IsRunning then
+  begin
+    lbMySQL.Enabled := True;
+    lbMySQLStatus.Enabled := True;
+    lbMySQLPort.Enabled := True;
+    lbMySQLStatus.Caption := SYMBOL_RUN;
+    lbMySQLStatus.Font.Color := clGreen;
+  end
+  else
+  begin
+    lbMySQL.Enabled := False;
+    lbMySQLStatus.Enabled := False;
+    lbMySQLPort.Enabled := False;
+    lbMySQLStatus.Caption := SYMBOL_STOP;
   end;
 end;
 
@@ -262,7 +367,6 @@ var
   RetryCount: Integer;
   PidFile, ErrorLog: string;
 begin
-  // Cập nhật đường dẫn Apache với SelectedApacheVersion
   PidFile := TPath.Combine(IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\logs', 'httpd.pid');
   if TFile.Exists(PidFile) then
     TFile.Delete(PidFile);
@@ -284,15 +388,15 @@ begin
   end;
 
   RetryCount := 0;
-  while (not IsApacheRunning) and (RetryCount < 10) do
+  while (not ServicesRunning('httpd.exe')) and (RetryCount < 10) do
   begin
     Sleep(200);
     Inc(RetryCount);
   end;
 
-  if IsApacheRunning then
+  if ServicesRunning('httpd.exe') then
   begin
-    UpdateUIAfterApacheChange(True);
+    UpdateApacheChange(True);
     WriteToLogMessage('Apache started: ' + ApachePath);
   end
   else
@@ -302,35 +406,191 @@ begin
   end;
 end;
 
-procedure TForm1.StopApache;
+procedure TForm1.StopServices;
 begin
   if FileExists(PIDFilePath) then
-    KillApacheByPID(FApacheDir)
+    KillServicesByPID(FApacheDir, FMySQLDir)
   else
-    KillApache;
+    KillServices;
 
-  if not IsApacheRunning then
+  if not ServicesRunning(['httpd.exe', 'mysqld.exe']) then
   begin
-    UpdateUIAfterApacheChange(False);
-    WriteToLogMessage('Apache stopped.');
+    UpdateApacheChange(False);
+    UpdateMySQLChange(False);
   end
   else
   begin
-    ShowMessage('Không thể dừng Apache!');
-    WriteToLogMessage('Failed to stop Apache.');
+    ShowMessage('Không thể dừng dịch vụ!');
   end;
 end;
 
-procedure TForm1.CheckVCRedist;
+procedure TForm1.StartMySQL(const MySQLExePath: string);
 var
-  SysDir: array[0..MAX_PATH] of Char;
+  Params: string;
+  SEInfo: TShellExecuteInfo;
+  ExitCode: DWORD;
+  PID: DWORD;
+  MySQLVersionShort, MySQLDataDir, MySQLIniPath, PIDFile, LogFile, IbdataFile: string;
+  Initialized: Boolean;
 begin
-  GetSystemDirectory(SysDir, MAX_PATH);
-  if not FileExists(IncludeTrailingPathDelimiter(SysDir) + 'vcruntime140.dll') then
+  if not FileExists(MySQLExePath) then
   begin
-    WriteToLogMessage('Visual C++ Redistributable not found');
-    ShowMessage('Visual C++ Redistributable is missing. Please install it from Microsoft''s website.');
-    ShellExecute(0, 'open', 'https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist', nil, nil, SW_SHOWNORMAL);
+    ShowMessage('Không tìm thấy mysqld.exe: ' + MySQLExePath);
+    WriteToLogMessage('Không tìm thấy mysqld.exe: ' + MySQLExePath);
+    Exit;
+  end;
+
+  MySQLVersionShort := TRegEx.Replace(SelectedMySQLVersion, '^mysql-(\d+)\.(\d+)\..*$', 'mysql-$1.$2');
+  MySQLIniPath := IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion + '\my.ini';
+  if IsVersionGreaterOrEqual(ExtractVersionNumber(SelectedMySQLVersion), '8.0.27') then
+    MySQLDataDir := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'data\' + MySQLVersionShort
+  else
+    MySQLDataDir := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'data\' + MySQLVersionShort + '_old';
+
+  CreateMySQLIniIfMissing(MySQLIniPath, MySQLDataDir);
+  PIDFile := TPath.Combine(MySQLDataDir, 'mysqld.pid');
+  LogFile := TPath.Combine(MySQLDataDir, 'mysqld.log');
+  IbdataFile := TPath.Combine(MySQLDataDir, 'ibdata1');
+
+  if not DirectoryExists(MySQLDataDir) then
+    ForceDirectories(MySQLDataDir);
+
+  Initialized := FileExists(IbdataFile);
+  if not Initialized then
+  begin
+    WriteToLogMessage('Đang khởi tạo MySQL data directory...');
+
+    Params := Format('--initialize-insecure --basedir="%s" --datadir="%s"', [
+      IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion,
+      MySQLDataDir
+    ]);
+
+    FillChar(SEInfo, SizeOf(SEInfo), 0);
+    SEInfo.cbSize := SizeOf(SEInfo);
+    SEInfo.Wnd := Application.Handle;
+    SEInfo.fMask := SEE_MASK_NOCLOSEPROCESS;
+    SEInfo.lpVerb := 'open';
+    SEInfo.lpFile := PChar(MySQLExePath);
+    SEInfo.lpParameters := PChar(Params);
+    SEInfo.nShow := SW_HIDE;
+
+    if ShellExecuteEx(@SEInfo) then
+    begin
+      WaitForSingleObject(SEInfo.hProcess, INFINITE);
+      CloseHandle(SEInfo.hProcess);
+      WriteToLogMessage('MySQL đã được khởi tạo thành công.');
+    end
+    else
+    begin
+      ShowMessage('Lỗi khởi tạo MySQL bằng --initialize-insecure');
+      WriteToLogMessage('Lỗi khi chạy mysqld --initialize-insecure');
+      Exit;
+    end;
+  end;
+
+  if TFile.Exists(PIDFile) then TFile.Delete(PIDFile);
+  if TFile.Exists(LogFile) then TFile.Delete(LogFile);
+
+  Params := Format('--log-error="%s" --pid-file="%s"', [
+    LogFile,
+    PIDFile
+  ]);
+
+  FillChar(SEInfo, SizeOf(SEInfo), 0);
+  SEInfo.cbSize := SizeOf(SEInfo);
+  SEInfo.Wnd := Application.Handle;
+  SEInfo.fMask := SEE_MASK_NOCLOSEPROCESS;
+  SEInfo.lpVerb := 'open';
+  SEInfo.lpFile := PChar(MySQLExePath);
+  SEInfo.lpParameters := PChar(Params);
+  SEInfo.nShow := SW_HIDE;
+
+  if ShellExecuteEx(@SEInfo) then
+  begin
+    WaitForInputIdle(SEInfo.hProcess, 5000);
+    GetExitCodeProcess(SEInfo.hProcess, ExitCode);
+    CloseHandle(SEInfo.hProcess);
+
+    if TFile.Exists(PIDFile) then
+    begin
+      PID := StrToIntDef(Trim(TFile.ReadAllText(PIDFile)), 0);
+      if PID > 0 then
+        WriteToLogMessage('MySQL đã khởi động, PID: ' + IntToStr(PID))
+      else
+        WriteToLogMessage('Không đọc được PID từ file: ' + PIDFile);
+    end;
+    UpdateMySQLChange(True);
+    WriteToLogMessage('MySQL đã được khởi động: ' + MySQLExePath);
+  end
+  else
+  begin
+    ShowMessage('Lỗi khi khởi động MySQL.');
+    WriteToLogMessage('ShellExecuteEx thất bại cho MySQL');
+  end;
+end;
+
+function TForm1.GetApachePort(const FilePath: string): string;
+var
+  Lines: TStringList;
+  Line, ListenValue: string;
+  I, PosColon: Integer;
+begin
+  Result := '80'; // mặc định
+  Lines := TStringList.Create;
+  try
+    if FileExists(FilePath) then
+    begin
+      Lines.LoadFromFile(FilePath);
+      for I := 0 to Lines.Count - 1 do
+      begin
+        Line := Trim(Lines[I]);
+        if (Line <> '') and (not Line.StartsWith('#')) and (LowerCase(Copy(Line, 1, 6)) = 'listen') then
+        begin
+          ListenValue := Trim(Copy(Line, 7, Length(Line))); // cắt phần "Listen"
+          PosColon := LastDelimiter(':', ListenValue);
+          if PosColon > 0 then
+            Result := Trim(Copy(ListenValue, PosColon + 1, MaxInt))
+          else
+            Result := Trim(ListenValue);
+          Exit;
+        end;
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+function TForm1.GetMySQLPort(const FilePath: string): string;
+var
+  Lines: TStringList;
+  Line: string;
+  I: Integer;
+  InMySQLDSection: Boolean;
+begin
+  Result := '3306'; // mặc định
+  InMySQLDSection := False;
+  Lines := TStringList.Create;
+  try
+    if FileExists(FilePath) then
+    begin
+      Lines.LoadFromFile(FilePath);
+      for I := 0 to Lines.Count - 1 do
+      begin
+        Line := Trim(Lines[I]);
+        if Line.StartsWith('[') and Line.EndsWith(']') then
+        begin
+          InMySQLDSection := SameText(Line, '[mysqld]');
+        end
+        else if InMySQLDSection and Line.ToLower.StartsWith('port=') then
+        begin
+          Result := Trim(Copy(Line, Length('port=') + 1, MaxInt));
+          Exit;
+        end;
+      end;
+    end;
+  finally
+    Lines.Free;
   end;
 end;
 
@@ -354,31 +614,12 @@ begin
     Form1.Caption := AppBaseTitle;
 end;
 
-procedure TForm1.FormClose(Sender: TObject; var Action: TCloseAction);
-begin
-  if Mutex <> 0 then
-    CloseHandle(Mutex);
-
-  if (FApacheChangeHandle <> 0) and (FApacheChangeHandle <> INVALID_HANDLE_VALUE) then
-    CloseHandle(FApacheChangeHandle);
-
-  if (FPhpChangeHandle <> 0) and (FPhpChangeHandle <> INVALID_HANDLE_VALUE) then
-    CloseHandle(FPhpChangeHandle);
-end;
-
-procedure TForm1.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-begin
-  CanClose := False;
-  Form1.Visible := False;
-  TrayIcon1.Visible := True;
-end;
-
 procedure TForm1.UncheckVersionMenu(VersionMenu: TMenuItem);
 var
   I: Integer;
 begin
   for I := 0 to VersionMenu.Count - 1 do
-    (VersionMenu.Items[I] as TMenuItem).Checked := False;
+    VersionMenu.Items[I].Checked := False;
 end;
 
 procedure TForm1.SelectVersion(Menu: TMenuItem; const NewVersion: string; var SelectedVersion: string; const LabelToUpdate: TLabel = nil);
@@ -400,7 +641,7 @@ begin
   SelectedVersion := NewVersion;
 
   if Assigned(LabelToUpdate) then
-    LabelToUpdate.Caption := Menu.Caption + ': ' + NewVersion;
+    LabelToUpdate.Caption := Menu.Caption + ' ' + ExtractVersionNumber(NewVersion);
 
   Config.UpdateConfig(SelectedPhpVersion, SelectedApacheVersion, SelectedMySQLVersion);
 end;
@@ -408,15 +649,13 @@ end;
 procedure TForm1.ApacheVersionMenuClick(Sender: TObject);
 var
   ApacheMenuItem: TMenuItem;
-  ApachePath, NewApacheVersion: string;
+  ApachePath, NewApacheVersion, ApachePort: string;
   WasRunning: Boolean;
 begin
   if not (Sender is TMenuItem) then Exit;
   ApacheMenuItem := Sender as TMenuItem;
-
   NewApacheVersion := ApacheMenuItem.Hint;
 
-  // Nếu không chọn gì hoặc đã là phiên bản hiện tại và thư mục còn tồn tại thì thoát
   if (NewApacheVersion = '') or
      ((NewApacheVersion = SelectedApacheVersion) and
       DirectoryExists(IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion)) then
@@ -424,18 +663,21 @@ begin
 
   SelectVersion(Version1, NewApacheVersion, SelectedApacheVersion, lbApache);
 
-  // Nếu đang chạy thì dừng lại
-  WasRunning := IsApacheRunning;
-  if WasRunning then StopApache;
+  // Cập nhật lại port
+  ApachePort := GetApachePort(IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\conf\httpd.conf');
+  lbApachePort.Caption := ApachePort;
+  lbApachePort.Tag := StrToIntDef(ApachePort, 80);
 
-  // Cập nhật cấu hình apache
-  ApacheConfig.UpdateApacheConfigs(
+  WasRunning := ServicesRunning('httpd.exe');
+  if WasRunning then StopServices;
+
+  ServicesConfig.UpdateApacheConfigs(
     IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion,
     SelectedApacheVersion,
-    SelectedPhpVersion
+    SelectedPhpVersion,
+    SelectedMySQLVersion
   );
 
-  // Nếu cần thì khởi động lại Apache
   if WasRunning then
   begin
     ApachePath := IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\bin\httpd.exe';
@@ -449,7 +691,6 @@ begin
       ShowMessage('Không tìm thấy Apache: ' + ApachePath);
   end;
 end;
-
 
 procedure TForm1.PhpVersionMenuClick(Sender: TObject);
 var
@@ -466,18 +707,16 @@ begin
   SelectVersion(Version2, NewPhpVersion, SelectedPhpVersion);
   UpdateWindowTitle;
 
-  // Nếu Apache đang chạy thì dừng lại
-  WasRunning := IsApacheRunning;
-  if WasRunning then StopApache;
+  WasRunning := ServicesRunning('httpd.exe');
+  if WasRunning then StopServices;
 
-  // Cập nhật cấu hình Apache
-  ApacheConfig.UpdateApacheConfigs(
+  ServicesConfig.UpdateApacheConfigs(
     IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion,
     SelectedApacheVersion,
-    SelectedPhpVersion
+    SelectedPhpVersion,
+    SelectedMySQLVersion
   );
 
-  // Khởi động lại nếu cần
   if WasRunning then
   begin
     ApachePath := IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\bin\httpd.exe';
@@ -495,7 +734,7 @@ end;
 procedure TForm1.MySQLVersionMenuClick(Sender: TObject);
 var
   MySQLMenuItem: TMenuItem;
-  NewMySQLVersion: string;
+  NewMySQLVersion, MySQLPort: string;
 begin
   if not (Sender is TMenuItem) then Exit;
   MySQLMenuItem := Sender as TMenuItem;
@@ -504,98 +743,47 @@ begin
   if (NewMySQLVersion = '') or (NewMySQLVersion = SelectedMySQLVersion) then Exit;
 
   SelectVersion(Version3, NewMySQLVersion, SelectedMySQLVersion, lbMySQL);
-end;
 
+  // Cập nhật lại port
+  MySQLPort := GetMySQLPort(IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion + '\my.ini');
+  lbMySQLPort.Caption := 'Port: ' + MySQLPort;
+  lbMySQLPort.Tag := StrToIntDef(MySQLPort, 3306);
+end;
 
 procedure TForm1.PopQuitClick(Sender: TObject);
 begin
-  if IsApacheRunning then
-    StopApache;
+  if ServicesRunning(['httpd.exe', 'mysqld.exe']) then
+    StopServices;
   Application.Terminate;
 end;
 
-procedure TForm1.WatchVersionDirs;
-var
-  ChangeHandles: array[0..2] of THandle;
-  WaitResult: DWORD;
+procedure TForm1.FormMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
 begin
-  // Lấy đường dẫn thư mục
-  FApacheDir := GetBinPath('apache');
-  FPHPDir    := GetBinPath('php');
-  FMySQLDir  := GetBinPath('mysql');
-
-  // Tạo các handle theo dõi thư mục
-  ChangeHandles[0] := FindFirstChangeNotification(PChar(FApacheDir), False,
-    FILE_NOTIFY_CHANGE_DIR_NAME or FILE_NOTIFY_CHANGE_FILE_NAME);
-  ChangeHandles[1] := FindFirstChangeNotification(PChar(FPHPDir), False,
-    FILE_NOTIFY_CHANGE_DIR_NAME or FILE_NOTIFY_CHANGE_FILE_NAME);
-  ChangeHandles[2] := FindFirstChangeNotification(PChar(FMySQLDir), False,
-    FILE_NOTIFY_CHANGE_DIR_NAME or FILE_NOTIFY_CHANGE_FILE_NAME);
-
-  if (ChangeHandles[0] = INVALID_HANDLE_VALUE) or
-     (ChangeHandles[1] = INVALID_HANDLE_VALUE) or
-     (ChangeHandles[2] = INVALID_HANDLE_VALUE) then
+  if Button = mbLeft then
   begin
-    // Nếu có handle nào lỗi thì thoát
-    Exit;
-  end;
-
-  try
-    while True do
-    begin
-      WaitResult := WaitForMultipleObjects(3, @ChangeHandles[0], False, INFINITE);
-
-      case WaitResult of
-        WAIT_OBJECT_0:
-          begin
-            TThread.Synchronize(nil,
-              procedure
-              begin
-                ProcessDirectoryChange;
-                UpdateApacheVersionMenu(FApacheDir);
-              end);
-            if not FindNextChangeNotification(ChangeHandles[0]) then Break;
-          end;
-
-        WAIT_OBJECT_0 + 1:
-          begin
-            TThread.Synchronize(nil,
-              procedure
-              begin
-                ProcessDirectoryChange;
-                UpdatePhpVersionMenu(FPHPDir);
-              end);
-            if not FindNextChangeNotification(ChangeHandles[1]) then Break;
-          end;
-
-        WAIT_OBJECT_0 + 2:
-          begin
-            TThread.Synchronize(nil,
-              procedure
-              begin
-                ProcessDirectoryChange;
-                UpdateMySQLVersionMenu(FMySQLDir);
-              end);
-            if not FindNextChangeNotification(ChangeHandles[2]) then Break;
-          end;
-
-      else
-        // Có lỗi xảy ra
-        Break;
-      end;
-    end;
-  finally
-    CloseHandle(ChangeHandles[0]);
-    CloseHandle(ChangeHandles[1]);
-    CloseHandle(ChangeHandles[2]);
+    ReleaseCapture;
+    SendMessage(Handle, WM_SYSCOMMAND, SC_MOVE or HTCAPTION, 0);
   end;
 end;
 
-procedure TForm1.ProcessDirectoryChange;
+procedure TForm1.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
-  UpdateApacheVersionMenu(FApacheDir);
-  UpdatePhpVersionMenu(FPHPDir);
-  UpdateMySQLVersionMenu(FMySQLDir);
+  if Mutex <> 0 then
+    CloseHandle(Mutex);
+
+  if (FApacheChangeHandle <> 0) and (FApacheChangeHandle <> INVALID_HANDLE_VALUE) then
+    CloseHandle(FApacheChangeHandle);
+
+  if (FPhpChangeHandle <> 0) and (FPhpChangeHandle <> INVALID_HANDLE_VALUE) then
+    CloseHandle(FPhpChangeHandle);
+end;
+
+procedure TForm1.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  CanClose := False;
+  Form1.Visible := False;
+  TrayIcon1.Visible := True;
 end;
 
 end.
