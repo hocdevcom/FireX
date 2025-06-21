@@ -27,7 +27,7 @@ begin
     ProdIniPath := PhpBaseDir + 'php.ini-production';
     DevIniPath := PhpBaseDir + 'php.ini-development';
 
-    WriteToLogMessage('Đường dẫn tới php.ini: ' + PhpIniPath);
+    //WriteToLogMessage('Đường dẫn tới php.ini: ' + PhpIniPath);
 
     // Nếu không tồn tại php.ini, cố gắng sao chép từ php.ini-production hoặc php.ini-development
     if not FileExists(PhpIniPath) then
@@ -35,12 +35,12 @@ begin
       if FileExists(ProdIniPath) then
       begin
         TFile.Copy(ProdIniPath, PhpIniPath);
-        WriteToLogMessage('Đã sao chép từ php.ini-production');
+        //WriteToLogMessage('Đã sao chép từ php.ini-production');
       end
       else if FileExists(DevIniPath) then
       begin
         TFile.Copy(DevIniPath, PhpIniPath);
-        WriteToLogMessage('Đã sao chép từ php.ini-development');
+        //WriteToLogMessage('Đã sao chép từ php.ini-development');
       end
       else
       begin

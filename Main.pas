@@ -10,7 +10,7 @@ uses
   Vcl.ExtCtrls, Vcl.Imaging.pngimage, Vcl.ButtonGroup, System.ImageList,
   Vcl.ImgList, System.UITypes, Vcl.Buttons, VersionWatcher, WriteToLog,
   ServicesConfig, TrayIconHandler, Vcl.VirtualImageList, Vcl.BaseImageCollection,
-  Vcl.ImageCollection;
+  Vcl.ImageCollection, Settings, PortUtils;
 
 type
   TForm1 = class(TForm)
@@ -29,6 +29,9 @@ type
     BtnTer: TBitBtn;
     BtnRoot: TBitBtn;
     Version3: TMenuItem;
+    VirtualImageList2: TVirtualImageList;
+    ImgSettings: TImage;
+    SubExt: TMenuItem;
     procedure btRootClick(Sender: TObject);
     procedure btWebClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
@@ -42,6 +45,11 @@ type
     procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure BtnDBClick(Sender: TObject);
+    procedure BitBtn1Click(Sender: TObject);
+    procedure ImgSettingsMouseEnter(Sender: TObject);
+    procedure ImgSettingsMouseLeave(Sender: TObject);
+    procedure ImgSettingsClick(Sender: TObject);
+    procedure OnPortChanged;
   private
     lbApache, lbApacheStatus: TLabel;
     lbMySQL, lbMySQLStatus: TLabel;
@@ -62,13 +70,13 @@ type
     procedure CreateStatusLabel(const ACaption: string; ALeft, ATop: Integer;
   out ALabel, AStatus, APortLabel: TLabel; PortValue: string);
     procedure CheckSelectedVersionInMenu(Menu: TMenuItem; const Version: string);
+    procedure UpdateExtensionsMenu;
+    procedure PHPExtensionClick(Sender: TObject);
   public
     SelectedApacheVersion: string;
     SelectedPhpVersion: string;
     SelectedMySQLVersion: string;
     FApacheDir, FPHPDir, FMySQLDir: string;
-    function GetApachePort(const FilePath: string): string;
-    function GetMySQLPort(const FilePath: string): string;
     function GetBinPath(const SubDir: string): string;
   end;
 
@@ -86,6 +94,20 @@ implementation
 
 {$R *.dfm}
 
+procedure SetImageFromIndex(Image: TImage; ImgList: TVirtualImageList; Index: Integer);
+var
+  bmp: TBitmap;
+begin
+  bmp := TBitmap.Create;
+  try
+    ImgList.GetBitmap(Index, bmp);
+    Image.Picture.Bitmap.Assign(bmp);
+    Image.Refresh;  // Cập nhật lại hiển thị
+  finally
+    bmp.Free;
+  end;
+end;
+
 procedure TForm1.FormCreate(Sender: TObject);
 var
   ApachePort, MySQLPort: string;
@@ -98,6 +120,7 @@ begin
     Exit;
   end;
 
+  Application.Icon := Self.Icon;
   InitializeTrayIcon;
 
   FApacheDir := GetBinPath('apache');
@@ -127,11 +150,12 @@ begin
   if Config.IsVersionValid(Config.MySQLVersion, FMySQLDir) then
     SelectedMySQLVersion := Config.MySQLVersion;
 
-  ApachePort := GetApachePort(IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\conf\httpd.conf');
-  MySQLPort := GetMySQLPort(IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion + '\my.ini');
+  ApachePort := TPortUtils.GetApachePort(FApacheDir, SelectedApacheVersion);
+  MySQLPort := TPortUtils.GetMySQLPort(FMySQLDir, SelectedMySQLVersion);
 
   CreateStatusLabel('Apache', 130, 50, lbApache, lbApacheStatus, lbApachePort, ApachePort);
   CreateStatusLabel('MySQL', 130, 80, lbMySQL, lbMySQLStatus, lbMySQLPort, MySQLPort);
+  SetImageFromIndex(ImgSettings, VirtualImageList2, 0);
 
   if SelectedApacheVersion <> '' then
   begin
@@ -149,12 +173,149 @@ begin
   begin
     CheckSelectedVersionInMenu(Version2, SelectedPhpVersion);
     UpdateWindowTitle;
+    UpdateExtensionsMenu;
   end;
 
   TThread.CreateAnonymousThread(WatchVersionDirs).Start;
   UpdateApacheChange(ServicesRunning('httpd.exe'));
   UpdateMySQLChange(ServicesRunning('mysqld.exe'));
 end;
+
+procedure TForm1.UpdateExtensionsMenu;
+var
+  FPHPIniPath: string;
+  IniFile: TStringList;
+  I: Integer;
+  ExtName, LineTrimmed: string;
+  ExtMenuItem: TMenuItem;
+begin
+  if SelectedPhpVersion = '' then Exit;
+
+  // Xóa các item cũ
+  while SubExt.Count > 0 do
+    SubExt.Delete(0);
+
+  FPHPIniPath := IncludeTrailingPathDelimiter(FPHPDir) + SelectedPhpVersion + '\php.ini';
+  if not FileExists(FPHPIniPath) then Exit;
+
+  IniFile := TStringList.Create;
+  try
+    IniFile.LoadFromFile(FPHPIniPath);
+
+    for I := 0 to IniFile.Count - 1 do
+    begin
+      LineTrimmed := Trim(IniFile[I]);
+
+      // Kiểm tra dòng bắt đầu bằng extension= hoặc ;extension=
+      if (Pos('extension=', LineTrimmed) = 1) or (Pos(';extension=', LineTrimmed) = 1) then
+      begin
+        // Cắt phần sau dấu =
+        ExtName := Trim(Copy(LineTrimmed, Pos('=', LineTrimmed) + 1));
+
+        // Chỉ lấy tên tới dấu cách đầu tiên (nếu có)
+        if Pos(' ', ExtName) > 0 then
+          ExtName := Copy(ExtName, 1, Pos(' ', ExtName) - 1);
+
+        // Loại bỏ phần comment sau dấu ;
+        if Pos(';', ExtName) > 0 then
+          ExtName := Copy(ExtName, 1, Pos(';', ExtName) - 1);
+
+        ExtName := Trim(ExtName);
+
+        if ExtName <> '' then
+        begin
+          //WriteToLogMessage('Parsed extension in menu: ' + ExtName);
+
+          ExtMenuItem := TMenuItem.Create(SubExt);
+          ExtMenuItem.Caption := ExtName;
+          ExtMenuItem.AutoCheck := True;
+          ExtMenuItem.Checked := (Pos(';', LineTrimmed) <> 1);
+          ExtMenuItem.OnClick := PHPExtensionClick;
+          SubExt.Add(ExtMenuItem);
+        end;
+      end;
+    end;
+  finally
+    IniFile.Free;
+  end;
+end;
+
+procedure TForm1.PHPExtensionClick(Sender: TObject);
+var
+  IniFile: TStringList;
+  FPHPIniPath, Line, ExtName, LineTrimmed, ExtPart: string;
+  I, EqPos: Integer;
+  MenuItem: TMenuItem;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  MenuItem := TMenuItem(Sender);
+  ExtName := StringReplace(MenuItem.Caption, '&', '', [rfReplaceAll]);
+
+  //WriteToLogMessage('Clicked extension: ' + ExtName);
+
+  FPHPIniPath := IncludeTrailingPathDelimiter(FPHPDir) + SelectedPhpVersion + '\php.ini';
+  if not FileExists(FPHPIniPath) then
+  begin
+    //WriteToLogMessage('php.ini not found: ' + FPHPIniPath);
+    Exit;
+  end;
+
+  IniFile := TStringList.Create;
+  try
+    IniFile.LoadFromFile(FPHPIniPath);
+
+    for I := 0 to IniFile.Count - 1 do
+    begin
+      Line := IniFile[I];
+      LineTrimmed := TrimLeft(Line);
+
+      if (Pos('extension=', LineTrimmed) = 1) or (Pos(';extension=', LineTrimmed) = 1) then
+      begin
+        EqPos := Pos('=', LineTrimmed);
+        if EqPos > 0 then
+        begin
+          ExtPart := Trim(Copy(LineTrimmed, EqPos + 1, MaxInt));
+
+          // Cắt bỏ phần sau tên extension
+          if Pos(' ', ExtPart) > 0 then
+            ExtPart := Copy(ExtPart, 1, Pos(' ', ExtPart) - 1)
+          else if Pos(';', ExtPart) > 0 then
+            ExtPart := Copy(ExtPart, 1, Pos(';', ExtPart) - 1);
+
+          ExtPart := Trim(ExtPart);
+
+          if SameText(ExtPart, ExtName) then
+          begin
+            //WriteToLogMessage('  => Match found: ' + LineTrimmed);
+
+            if Pos(';', LineTrimmed) = 1 then
+            begin
+              // Bỏ comment (;) để bật extension
+              IniFile[I] := Copy(Line, Pos(';', Line) + 1, MaxInt);
+              MenuItem.Checked := True;  // Đánh dấu tích
+              //WriteToLogMessage('  => Extension enabled');
+            end
+            else
+            begin
+              // Thêm comment (;) để tắt extension
+              IniFile[I] := ';' + Line;
+              MenuItem.Checked := False; // Bỏ tích
+              //WriteToLogMessage('  => Extension disabled');
+            end;
+
+            Break;
+          end;
+        end;
+      end;
+    end;
+
+    IniFile.SaveToFile(FPHPIniPath);
+    //WriteToLogMessage('php.ini saved');
+  finally
+    IniFile.Free;
+  end;
+end;
+
 
 function TForm1.IsApachePhpCompatible(const ApacheVersion, PhpVersion: string; ShowWarning: Boolean = True): Boolean;
 var
@@ -176,9 +337,10 @@ begin
     Result := False;
     if ShowWarning then
     begin
-      ShowMessage('⚠ Apache và PHP không tương thích:' + sLineBreak +
-                  '- Apache ≥ 2.4.62 yêu cầu PHP ≥ 8.4.0' + sLineBreak +
-                  '- Apache < 2.4.62 yêu cầu PHP < 8.4.0');
+    MessageDlg('⚠ Apache và PHP không tương thích' + sLineBreak +
+               '-  Apache ≥ 2.4.62 yêu cầu PHP ≥ 8.4.0' + sLineBreak +
+               '-  Apache < 2.4.62 yêu cầu PHP < 8.4.0',
+               mtWarning, [mbOK], 0);
     end;
   end;
 end;
@@ -202,6 +364,19 @@ end;
 function TForm1.GetBinPath(const SubDir: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(ExtractFilePath(Application.ExeName)) + 'bin\' + SubDir;
+end;
+
+procedure TForm1.BitBtn1Click(Sender: TObject);
+var
+  FrmPhu: TForm2;
+begin
+  FrmPhu := TForm2.Create(Self);
+
+  // Căn giữa form phụ theo form chính (dùng Self)
+  FrmPhu.Left := Self.Left + (Self.Width - FrmPhu.Width) div 2;
+  FrmPhu.Top := Self.Top + (Self.Height - FrmPhu.Height) div 2;
+
+  FrmPhu.Show;
 end;
 
 procedure TForm1.BtnDBClick(Sender: TObject);
@@ -236,17 +411,13 @@ begin
     Exit;
   end;
 
-  // Kiểm tra tương thích 2 chiều giữa Apache và PHP (có cảnh báo nếu sai)
-  if not IsApachePhpCompatible(SelectedApacheVersion, SelectedPhpVersion, True) then
-    Exit;
-
   ApachePath := IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\bin\httpd.exe';
   MySQLPath := IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion + '\bin\mysqld.exe';
 
   if not FileExists(ApachePath) then
   begin
     ShowMessage('Không tìm thấy Apache!: ' + ApachePath);
-    WriteToLogMessage('Không tìm thấy Apache! Đường dẫn: ' + ApachePath);
+    //WriteToLogMessage('Không tìm thấy Apache! Đường dẫn: ' + ApachePath);
     Exit;
   end;
 
@@ -256,6 +427,10 @@ begin
   end
   else
   begin
+    // Kiểm tra tương thích 2 chiều giữa Apache và PHP (có cảnh báo nếu sai)
+    if not IsApachePhpCompatible(SelectedApacheVersion, SelectedPhpVersion, True) then
+      Exit;
+
     // Cập nhật lại file cấu hình
     ServicesConfig.UpdateApacheConfigs(
       IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion,
@@ -282,8 +457,14 @@ begin
 end;
 
 procedure TForm1.btWebClick(Sender: TObject);
+var
+  ApachePort: string;
 begin
-  ShellExecute(0, 'open', 'http://localhost', nil, nil, SW_SHOWNORMAL);
+  ApachePort := lbApachePort.Caption;
+  if ApachePort <> '' then
+    ShellExecute(0, 'open', PChar('http://localhost:' + ApachePort), nil, nil, SW_SHOWNORMAL)
+  else
+    ShellExecute(0, 'open', 'http://localhost', nil, nil, SW_SHOWNORMAL);
 end;
 
 procedure TForm1.CreateStatusLabel(const ACaption: string; ALeft, ATop: Integer;
@@ -382,7 +563,7 @@ begin
     on E: Exception do
     begin
       ShowMessage('Lỗi khởi động Apache: ' + E.Message);
-      WriteToLogMessage('ShellExecute exception: ' + E.Message);
+      //WriteToLogMessage('ShellExecute exception: ' + E.Message);
       Exit;
     end;
   end;
@@ -397,12 +578,12 @@ begin
   if ServicesRunning('httpd.exe') then
   begin
     UpdateApacheChange(True);
-    WriteToLogMessage('Apache started: ' + ApachePath);
+    //WriteToLogMessage('Apache started: ' + ApachePath);
   end
   else
   begin
     ShowMessage('Không thể khởi động Apache!');
-    WriteToLogMessage('Apache failed to start: ' + ApachePath);
+    //WriteToLogMessage('Apache failed to start: ' + ApachePath);
   end;
 end;
 
@@ -436,7 +617,7 @@ begin
   if not FileExists(MySQLExePath) then
   begin
     ShowMessage('Không tìm thấy mysqld.exe: ' + MySQLExePath);
-    WriteToLogMessage('Không tìm thấy mysqld.exe: ' + MySQLExePath);
+    //WriteToLogMessage('Không tìm thấy mysqld.exe: ' + MySQLExePath);
     Exit;
   end;
 
@@ -458,7 +639,7 @@ begin
   Initialized := FileExists(IbdataFile);
   if not Initialized then
   begin
-    WriteToLogMessage('Đang khởi tạo MySQL data directory...');
+    //WriteToLogMessage('Đang khởi tạo MySQL data directory...');
 
     Params := Format('--initialize-insecure --basedir="%s" --datadir="%s"', [
       IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion,
@@ -478,12 +659,12 @@ begin
     begin
       WaitForSingleObject(SEInfo.hProcess, INFINITE);
       CloseHandle(SEInfo.hProcess);
-      WriteToLogMessage('MySQL đã được khởi tạo thành công.');
+      //WriteToLogMessage('MySQL đã được khởi tạo thành công.');
     end
     else
     begin
       ShowMessage('Lỗi khởi tạo MySQL bằng --initialize-insecure');
-      WriteToLogMessage('Lỗi khi chạy mysqld --initialize-insecure');
+      //WriteToLogMessage('Lỗi khi chạy mysqld --initialize-insecure');
       Exit;
     end;
   end;
@@ -520,78 +701,41 @@ begin
         WriteToLogMessage('Không đọc được PID từ file: ' + PIDFile);
     end;
     UpdateMySQLChange(True);
-    WriteToLogMessage('MySQL đã được khởi động: ' + MySQLExePath);
+    //WriteToLogMessage('MySQL đã được khởi động: ' + MySQLExePath);
   end
   else
   begin
     ShowMessage('Lỗi khi khởi động MySQL.');
-    WriteToLogMessage('ShellExecuteEx thất bại cho MySQL');
+    //WriteToLogMessage('ShellExecuteEx thất bại cho MySQL');
   end;
 end;
 
-function TForm1.GetApachePort(const FilePath: string): string;
+procedure TForm1.ImgSettingsClick(Sender: TObject);
 var
-  Lines: TStringList;
-  Line, ListenValue: string;
-  I, PosColon: Integer;
+  FrmPhu: TForm2;
 begin
-  Result := '80'; // mặc định
-  Lines := TStringList.Create;
+  FrmPhu := TForm2.Create(Self);
   try
-    if FileExists(FilePath) then
-    begin
-      Lines.LoadFromFile(FilePath);
-      for I := 0 to Lines.Count - 1 do
-      begin
-        Line := Trim(Lines[I]);
-        if (Line <> '') and (not Line.StartsWith('#')) and (LowerCase(Copy(Line, 1, 6)) = 'listen') then
-        begin
-          ListenValue := Trim(Copy(Line, 7, Length(Line))); // cắt phần "Listen"
-          PosColon := LastDelimiter(':', ListenValue);
-          if PosColon > 0 then
-            Result := Trim(Copy(ListenValue, PosColon + 1, MaxInt))
-          else
-            Result := Trim(ListenValue);
-          Exit;
-        end;
-      end;
-    end;
+    FrmPhu.Left := Self.Left + (Self.Width - FrmPhu.Width) div 2;
+    FrmPhu.Top := Self.Top + (Self.Height - FrmPhu.Height) div 2;
+
+    // Gán sự kiện để reload port khi có thay đổi
+    FrmPhu.OnPortChanged := OnPortChanged;
+    FrmPhu.ShowModal;
   finally
-    Lines.Free;
+    FrmPhu.Free;
   end;
 end;
 
-function TForm1.GetMySQLPort(const FilePath: string): string;
-var
-  Lines: TStringList;
-  Line: string;
-  I: Integer;
-  InMySQLDSection: Boolean;
+
+procedure TForm1.ImgSettingsMouseEnter(Sender: TObject);
 begin
-  Result := '3306'; // mặc định
-  InMySQLDSection := False;
-  Lines := TStringList.Create;
-  try
-    if FileExists(FilePath) then
-    begin
-      Lines.LoadFromFile(FilePath);
-      for I := 0 to Lines.Count - 1 do
-      begin
-        Line := Trim(Lines[I]);
-        if Line.StartsWith('[') and Line.EndsWith(']') then
-        begin
-          InMySQLDSection := SameText(Line, '[mysqld]');
-        end
-        else if InMySQLDSection and Line.ToLower.StartsWith('port=') then
-        begin
-          Result := Trim(Copy(Line, Length('port=') + 1, MaxInt));
-          Exit;
-        end;
-      end;
-    end;
-  finally
-    Lines.Free;
-  end;
+  SetImageFromIndex(ImgSettings, VirtualImageList2, 1);
+end;
+
+procedure TForm1.ImgSettingsMouseLeave(Sender: TObject);
+begin
+  SetImageFromIndex(ImgSettings, VirtualImageList2, 0);
 end;
 
 procedure TForm1.InitializeTrayIcon;
@@ -602,17 +746,30 @@ begin
 end;
 
 procedure TForm1.UpdateWindowTitle;
+var
+  NewCaption: string;
 begin
   if SelectedPhpVersion <> '' then
   begin
     if Pos('NTS', UpperCase(SelectedPhpVersion)) > 0 then
-      Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (NTS)'
+    begin
+      NewCaption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (NTS)';
+    end
     else
-      Form1.Caption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (TS)';
+    begin
+      NewCaption := AppBaseTitle + ' | ' + SelectedPhpVersion + ' (TS)';
+    end;
+
+    Form1.Caption := NewCaption;
+    SetWindowText(Application.Handle, PChar('FireX'));
   end
   else
+  begin
     Form1.Caption := AppBaseTitle;
+    SetWindowText(Application.Handle, PChar('FireX'));
+  end;
 end;
+
 
 procedure TForm1.UncheckVersionMenu(VersionMenu: TMenuItem);
 var
@@ -664,9 +821,8 @@ begin
   SelectVersion(Version1, NewApacheVersion, SelectedApacheVersion, lbApache);
 
   // Cập nhật lại port
-  ApachePort := GetApachePort(IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\conf\httpd.conf');
+  ApachePort := TPortUtils.GetApachePort(FApacheDir, SelectedApacheVersion);
   lbApachePort.Caption := ApachePort;
-  lbApachePort.Tag := StrToIntDef(ApachePort, 80);
 
   WasRunning := ServicesRunning('httpd.exe');
   if WasRunning then StopServices;
@@ -680,6 +836,12 @@ begin
 
   if WasRunning then
   begin
+    if not IsApachePhpCompatible(SelectedApacheVersion, SelectedPhpVersion, True) then
+    begin
+      ShowMessage('Apache và PHP không tương thích, Apache sẽ không được khởi động lại.');
+      Exit;
+    end;
+
     ApachePath := IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\bin\httpd.exe';
     if FileExists(ApachePath) then
     begin
@@ -719,6 +881,13 @@ begin
 
   if WasRunning then
   begin
+    // Kiểm tra tương thích trước khi Start lại Apache
+    if not IsApachePhpCompatible(SelectedApacheVersion, SelectedPhpVersion, True) then
+    begin
+      ShowMessage('Phiên bản PHP không tương thích, Apache sẽ không được khởi động lại.');
+      Exit;
+    end;
+
     ApachePath := IncludeTrailingPathDelimiter(FApacheDir) + SelectedApacheVersion + '\bin\httpd.exe';
     if FileExists(ApachePath) then
     begin
@@ -729,6 +898,8 @@ begin
     else
       ShowMessage('Không tìm thấy Apache: ' + ApachePath);
   end;
+  // Cập nhật Extensions
+  UpdateExtensionsMenu;
 end;
 
 procedure TForm1.MySQLVersionMenuClick(Sender: TObject);
@@ -745,9 +916,8 @@ begin
   SelectVersion(Version3, NewMySQLVersion, SelectedMySQLVersion, lbMySQL);
 
   // Cập nhật lại port
-  MySQLPort := GetMySQLPort(IncludeTrailingPathDelimiter(FMySQLDir) + SelectedMySQLVersion + '\my.ini');
-  lbMySQLPort.Caption := 'Port: ' + MySQLPort;
-  lbMySQLPort.Tag := StrToIntDef(MySQLPort, 3306);
+  MySQLPort := TPortUtils.GetMySQLPort(FMySQLDir, SelectedMySQLVersion);
+  lbMySQLPort.Caption := MySQLPort;
 end;
 
 procedure TForm1.PopQuitClick(Sender: TObject);
@@ -785,5 +955,16 @@ begin
   Form1.Visible := False;
   TrayIcon1.Visible := True;
 end;
+
+procedure TForm1.OnPortChanged;
+var
+  ApachePort, MySQLPort: string;
+begin
+  ApachePort := TPortUtils.GetApachePort(FApacheDir, SelectedApacheVersion);
+  MySQLPort := TPortUtils.GetMySQLPort(FMySQLDir, SelectedMySQLVersion);
+  lbApachePort.Caption := ApachePort;
+  lbMySQLPort.Caption := MySQLPort;
+end;
+
 
 end.
