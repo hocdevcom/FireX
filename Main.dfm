@@ -225,7 +225,7 @@ object Form1: TForm1
     Left = 564
     Top = 328
     object PopLaraX: TMenuItem
-      Caption = 'LaraX'
+      Caption = 'FireX'
       object PopWeb: TMenuItem
         Caption = 'Web'
       end
